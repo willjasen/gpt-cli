@@ -1,5 +1,6 @@
 # gpt-cli
 use chatgpt to do things in command line
+(this project is very alpha stage, use with caution)
 
 ### consider this
 
