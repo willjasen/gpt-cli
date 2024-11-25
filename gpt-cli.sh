@@ -18,27 +18,9 @@ START_TIME=$(date +%s)
 
 # Configuration variables
 MODEL="gpt-4"               # Define the model to use
-PROMPT="$1"                 # The prompt passed as the first parameter
+PROMPT="Provide me only the command line snippets with no other additional response to: $1" # The prompt passed as the first parameter
 OUTPUT_FILE="${2:-./output.txt}" # Default output file
-SHOW_RESPONSE="${3:-false}" # Default to not showing the full response
-
-# Rename existing file if necessary
-if [[ -f "$OUTPUT_FILE" ]]; then
-  BASENAME=$(basename "$OUTPUT_FILE")
-  DIRNAME=$(dirname "$OUTPUT_FILE")
-  EXT="${BASENAME##*.}"    # Extract the file extension
-  FILENAME="${BASENAME%.*}" # Extract the file name without extension
-
-  COUNTER=1
-  NEW_FILE="$DIRNAME/.$FILENAME.$EXT.$COUNTER"
-  while [[ -f "$NEW_FILE" ]]; do
-    COUNTER=$((COUNTER + 1))
-    NEW_FILE="$DIRNAME/.$FILENAME.$EXT.$COUNTER"
-  done
-
-  mv "$OUTPUT_FILE" "$NEW_FILE"
-  echo "Existing file renamed to $(basename "$NEW_FILE")"
-fi
+SHOW_RESPONSE="${3:-false}"      # Default to not showing the full response
 
 # Send request to OpenAI API
 API_RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
@@ -54,24 +36,33 @@ API_RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
 RESPONSE=$(echo "$API_RESPONSE" | jq -r '.choices[0].message.content')
 USAGE=$(echo "$API_RESPONSE" | jq -r '.usage.total_tokens')
 
-# Attempt to extract a code block; fallback to entire response if not found
-CODE=$(echo "$RESPONSE" | sed -n '/^```/,/^```/p' | sed 's/^```.*//g')
-if [[ -z "$CODE" ]]; then
-  CODE="$RESPONSE" # Fallback to the full response if no code block is found
-fi
+# Save the response to the output file
+echo "$RESPONSE" > "$OUTPUT_FILE"
+echo "Response saved to $OUTPUT_FILE"
 
-# Save the code to the output file
-if [[ -n "$CODE" ]]; then
-  echo "$CODE" > "$OUTPUT_FILE"
-  echo "Response saved to $OUTPUT_FILE"
-else
-  echo "Failed to extract meaningful content. Please refine your prompt."
-fi
-
-# Optionally display the full explanation in the terminal
+# Optionally display the full response in the terminal
 if [[ "$SHOW_RESPONSE" == "true" ]]; then
   echo "Full response:"
   echo "$RESPONSE"
+fi
+
+# Extract the command and execute it
+COMMAND=$(echo "$RESPONSE" | sed -n '/^```/,/^```/p' | sed 's/^```.*//g')
+
+# Fallback if no code block found
+if [[ -z "$COMMAND" ]]; then
+  COMMAND="$RESPONSE"
+fi
+
+# Display and confirm command execution
+echo "Command generated for execution:"
+echo "$COMMAND"
+read -p "Do you want to execute this command? (yes/no): " CONFIRM
+if [[ "$CONFIRM" == "yes" ]]; then
+  echo "Executing command..."
+  eval "$COMMAND"
+else
+  echo "Command execution skipped."
 fi
 
 # End stopwatch and calculate elapsed time
